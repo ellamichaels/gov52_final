@@ -1,0 +1,116 @@
+---
+title: "Gov 52 Final Replication Project"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library("effects")
+library("foreign")
+library("gmodels")
+library("gplots")
+library("nlme")
+library("nnet")
+library("stargazer")
+library(MASS)
+library(rockchalk)
+library(pscl)
+library(car)
+library(DescTools)
+library(psych)
+library(MNP)
+
+# Loading/cleaning genpop data
+d1 <- read.dta("data/genpop replication.dta") %>%
+  mutate(race = relevel(race, ref = "White"),
+         dideo = relevel(dideo, ref = "Moderate"),
+         PartyID = relevel(PartyID, ref = "Independent"),
+         educ = relevel(educ, ref = "Some College"),
+         Age = Recode(Age, "-936 = '18"),
+         Age = as.numeric(Age)) # possibly add 17, are ages lagged?
+
+
+```
+
+
+```{r Table 1}
+
+##Logit Models
+mod.40 = multinom(Q23_1~Extra+Open+consc+Agree+emotstab+educ+income+race+dideo+PartyID+gender+Age, data=d1) # not used
+mod.50 = polr(Q23_1~Extra+Open+consc+Agree+emotstab+educ+income+race+dideo+PartyID+gender+Age, data=d1)
+
+# No controls
+mod.140 = multinom(Q23_1~Extra+Open+consc+Agree+emotstab, data=d1) # not used
+mod.150 = polr(Q23_1~Extra+Open+consc+Agree+emotstab, data=d1)
+
+## TABLE 1 OUTPUT - ordered logit used
+stargazer(mod.150,mod.50, type='html', style='ajps', out = "table1.htm")
+
+##Calculate Pseudo R-squared
+PseudoR2(mod.150, "all")
+
+```
+
+
+```{r Figure 1}
+
+##Grab Effects for Plotting Figure 1
+##Grab Effects for Plotting Figure 1
+effagree <- as.data.frame(effect(c('Agree'), mod=mod.50, xlevels=list(Agree=c(0,0.5, 1, 1.5, 2,2.5,3)))) %>%
+  dplyr::select("Agree", "prob.I.am.open.to.the.possibility.of.holding.elective.office.in.the.future.") %>%
+  rename("hello" = "prob.I.am.open.to.the.possibility.of.holding.elective.office.in.the.future.")
+effcons = as.data.frame(effect(c('consc'), mod=mod.51))
+effextra = as.data.frame(effect(c('Extra'), mod=mod.51))
+effopen = as.data.frame(effect(c('Open'), mod=mod.51))
+effneuro = as.data.frame(effect(c('emotstab'), mod=mod.51))
+
+```
+
+```{r AMOS cleaning}
+
+d2 <- read.dta("data/AMOS replication.dta") %>%
+  mutate(runhigher = factor(progamb_runhigher),
+         progamb = as.numeric(runhigher))
+d2$progamb_winlegis_1[d2$progamb_winlegis_1==-99] <- NA
+
+
+```
+
+```{r Table 2}
+
+# ordered logit, no controls (col 1, table 2)
+mod.71=polr(runhigher~extra4pt+ open4pt+agree4pt+ consc4pt+ stable4pt, data=d2)
+
+# ordered logit, controls (col 2, table 2)
+mod.71c <- polr(runhigher~extra4pt+ open4pt+agree4pt+ consc4pt+ stable4pt+ closevote+ tenure+ progamb_current+termlimits+ partisanelect+ progamb_similar_1+ progamb_winlegis_1 + gender, data=d2)
+# coefficients slightly different - appears something is different about the data because the observation numbers are slightly off. Tried it with their exact code so not sure what's going on here.
+
+# Table 2
+stargazer(mod.71, mod.71c, type = "html", out = "table2.htm")
+
+
+```
+
+```{r Table 3}
+
+# Ordered logit
+mod.100 = polr(office~extra4pt+ open4pt+agree4pt+ consc4pt+ stable4pt, data=d2)
+mod.101 = polr(office~extra4pt+ open4pt+agree4pt+ consc4pt+ stable4pt+ closevote+ tenure+ progamb_current+termlimits+ partisanelect+ tenure+ progamb_similar_1+ progamb_winlegis_1+gender, data=d2)
+
+# Multinomial (not used)
+mod.111 = multinom(office~extra4pt+ open4pt+agree4pt+ consc4pt+ stable4pt+ closevote+ tenure+ progamb_current+termlimits+ partisanelect+ tenure+ progamb_similar_1+ progamb_winlegis_1+gender, data=d2) 
+
+# Table 3
+stargazer(mod.100,mod.101, type='text', style='ajps')
+
+```
+```{r Figure 3 (Interaction)}
+
+mod.113 = polr(runhigher~extra4pt+ open4pt+agree4pt+ consc4pt+ stable4pt+ closevote+ tenure+ progamb_current+termlimits+ partisanelect+ tenure+ progamb_similar_1+ progamb_winlegis_1+gender, data=d2)
+mod.114 = polr(runhigher~extra4pt+ open4pt+agree4pt+ consc4pt+ stable4pt+ closevote+ tenure+ progamb_current+termlimits+ partisanelect+ tenure+ progamb_similar_1+ +gender+progamb_winlegis_1*agree4pt, data=d2)
+
+
+```
+
