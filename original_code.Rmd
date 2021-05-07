@@ -1,0 +1,111 @@
+---
+title: "Original Code"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library("effects")
+library("foreign")
+library("gmodels")
+library("gplots")
+library("nlme")
+library("nnet")
+library("stargazer")
+library(MASS)
+library(rockchalk)
+library(pscl)
+library(car)
+library(DescTools)
+library(psych)
+library(MNP)
+
+# Loading/cleaning genpop data
+d1 <- read.dta("data/genpop replication.dta") %>%
+  mutate(race = relevel(race, ref = "White"),
+         dideo = relevel(dideo, ref = "Moderate"),
+         PartyID = relevel(PartyID, ref = "Independent"),
+         educ = relevel(educ, ref = "Some College"),
+         Age = Recode(Age, "-936 = '18"),
+         Age = as.numeric(Age)) # possibly add 17, are ages lagged?
+
+
+```
+
+
+```{r}
+
+  
+
+##Logit Models
+mod.40 = multinom(Q23_1~Extra+Open+consc+Agree+emotstab+educ+income+race+dideo+PartyID+gender+Age, data=d1)
+mod.50 = polr(Q23_1~Extra+Open+consc+Agree+emotstab+educ+income+race+dideo+PartyID+gender+Age, data=d1)
+test <- stargazer(mod.50, type='html', style='ajps', out="test.htm")
+# Table 1 in final result 
+
+```
+
+```{r}
+##Reviewer 2 would like to see the models without these controls
+mod.140 = multinom(Q23_1~Extra+Open+consc+Agree+emotstab, data=d1)
+mod.150 = polr(Q23_1~Extra+Open+consc+Agree+emotstab, data=d1)
+#stargazer(mod.140,mod.150, type='html', style='ajps')
+##Calculate Pseudo R-squared
+##Models
+PseudoR2(mod.150, "all")
+#mod.400 = mnp(Q23_1~Extra+Open+consc+Agree+emotstab+educ+income+race+dideo+PartyID+gender+Age, data=d1)
+mod.500 = polr(Q23_1~Extra+Open+consc+Agree+emotstab+educ+income+race+dideo+PartyID+gender+Age, data=d1)
+mod.41 = multinom(Q23_1~educ+income+race+gender+Age+Extra+Open+Agree+consc+emotstab+infpp+polcar+businessC+socialC+CivicDuty+Candidate+lovePols+issue+supprty+servePub+Age, data=d1)
+mod.51=polr(Q23_1~educ+income+race+gender+Age+Extra+Open+Agree+consc+emotstab+infpp+polcar+businessC+socialC+CivicDuty+Candidate+lovePols+issue+supprty+servePub+Age, data=d1)
+#stargazer(mod.40,mod.41, type='html', style='ajps')
+##Grab Effects for Plotting Figure 1
+effagree = as.data.frame(effect(c('Agree'), mod=mod.51))
+effcons = as.data.frame(effect(c('consc'), mod=mod.51))
+effextra = as.data.frame(effect(c('Extra'), mod=mod.51))
+effopen = as.data.frame(effect(c('Open'), mod=mod.51))
+effneuro = as.data.frame(effect(c('emotstab'), mod=mod.51))
+write.csv(effagree, "Predicted Probability (agree).csv")
+write.csv(effcons, "Predicted Probability (cons).csv")
+write.csv(effextra, "Predicted Probability (extra).csv")
+write.csv(effopen, "Predicted Probability (open).csv")
+write.csv(effneuro, "Predicted Probability (emotstab).csv")
+##Create Kernel Density Plots for Each of the Big Five Traits in both surveys and for those interested in running
+```
+```{r}
+d2 = read.dta("AMOS replication.dta")
+d1$q23=as.numeric(d1$Q23_1)
+d1rh=subset(d1,q23>1 )
+d2rh=subset(d2, progamb_runhigher>1)
+d1male=subset(d1, gender==c("Male"))
+d1female=subset(d1, gender==c("Female"))
+d2$gender = factor(d2$femaleprop, labels=c("Male", "Female"))
+d2male=subset(d2, gender==c("Male"))
+d2female=subset(d2, gender==c("Female"))
+##Make the Agreeableness plot
+plot(d2ad, col=3,lty=3, main="Agreeableness",ylim=c(0,2), xlim=c(0,3.5),lwd=2)
+lines(d1rhad, col=2,lty=2, lwd=2)
+lines(d1ad, lty=1)
+#lines(d2rhad, col=4,lty=4, lwd=2)
+legend("topleft", legend=c("Black = General Population", "Red = General Population Interested in Elected Office", "Green = Municipal Officials"))
+##Grab the Densities for Extraversion
+d1ed=density(d1$Extra, adjust=2, na.rm=T)
+d1rhed=density(d1rh$Extra,adjust=2, na.rm=T)
+d2ed=density(d2$extra4pt,adjust=2, na.rm=T)
+d2rhed=density(d2rh$extra4pt,adjust=2, na.rm=T)
+d1med=density(d1male$Extra,adjust=2, na.rm=T)
+d1fed=density(d1female$Extra,adjust=2, na.rm=T)
+d2med=density(d2male$extra4pt,adjust=2, na.rm=T)
+d2fed=density(d2female$extra4pt,adjust=2, na.rm=T)
+
+##Make the Extraversion plot
+plot(d1ed, main="Extraversion", lty=1, ylim=c(0,2), xlim=c(0,3.5))
+lines(d1rhed, col=2,lty=2, lwd=2)
+lines(d2ed, col=3,lty=3,main="Extraversion", lwd=2)
+#lines(d2rhed, col=4,lty=4, lwd=2)
+legend("topleft", legend=c("Black = General Population", "Red = General Population Interested in Elected Office", "Green = Municipal Officials"))
+
+
+```
+
