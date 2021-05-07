@@ -1,0 +1,340 @@
+---
+title: "Gov 52 Final Replication Report"
+subtitle: "The Personality of the Politically Ambitious (Dynes, Hassell, and Miles)"
+output: pdf_document
+name: Ella Michaels
+---
+```{r setup, messages = FALSE, warnings = FALSE, include=FALSE, header = FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+
+library(tidyverse)
+library("effects")
+library("foreign")
+library("gmodels")
+library("gplots")
+library("nlme")
+library("nnet")
+library("stargazer")
+library(MASS)
+library(rockchalk)
+library(pscl)
+library(car)
+library(DescTools)
+library(psych)
+library(MNP)
+library(knitr)
+
+# Loading/cleaning genpop data
+d1 <- read.dta("data/genpop replication.dta") %>%
+  mutate(race = relevel(race, ref = "White"),
+         dideo = relevel(dideo, ref = "Moderate"),
+         PartyID = relevel(PartyID, ref = "Independent"),
+         educ = relevel(educ, ref = "Some College"),
+         Age = Recode(Age, "-936 = '18"),
+         Age = as.numeric(Age) + 17) # ages had 17 subtracted for some reason 
+
+##Logit Models
+mod.40 = multinom(Q23_1~Extra+Open+consc+Agree+emotstab+educ+income+race+dideo+PartyID+gender+Age, data=d1) # not used
+mod.50 = polr(Q23_1~Extra+Open+consc+Agree+emotstab+educ+income+race+dideo+PartyID+gender+Age, data=d1)
+
+# No controls
+mod.140 = multinom(Q23_1~Extra+Open+consc+Agree+emotstab, data=d1) # not used
+mod.150 = polr(Q23_1~Extra+Open+consc+Agree+emotstab, data=d1)
+
+```
+# Overview
+Historically, political ambition has been considered a product of external environments. However, as part of a broader movement emphasizing the role of individual personality in political outcomes and trajectories, Dynes et al. offer insight on how personality shapes political ambition. Their research helps demonstrate how personality affects both "nascent" and "progressive" political ambition. That is, a someone's interest in an initial run for public office, and a current politician's interest in running for higher office.^[Dynes, Hassell, and Miles, “The Personality of the Politically Ambitious.” The authors' original replication data for this project can be found [**here**](https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/1AZYRE). My work for this project is available on [**my github**](https://github.com/ellamichaels/gov52_final)] 
+
+They conduct two separate studies to test the effect of personality on nascent and progressive ambition, respectively. The first, on nascent political ambition, used a nationally representative survey of US adults. Respondents were asked to fill out a personality scale, used to measure where they fell on each facet of the five-factor model of personality. They also indicated their "attitude toward running for office in the future." Results suggested that those with higher levels of extroversion and openness were more likely to consider running for office, while those who were more agreeable and conscientious were less likely.
+
+The second study, this time on progressive ambition, used a nationally representative survey of local US politicians. Respondents were again asked to fill out a personality scale and answer a number of other questions about their future political plans. Those with higher levels of extroversion, openness, _and_ emotional stability were more likely to be progressively ambitious. Higher levels of agreeableness were negatively associated with progressive ambition, but this time around conscientiousness was less of a factor. Notably, personality was generally a weaker predictor of progressive ambition than nascent ambition.
+
+# Replication Process
+I replicated the primary analyses and figures for both parts of the study (on nascent and progressive ambition, respectively). All models included use ordered logistic regression, since all of the dependent variables on ambition are ordered. Model versions using multinomial logistic regression were included in the authors' appendix, but were not summarized in the primary paper and yield consistent results. In each table, the output for the model without controls (i.e. only five factor personality traits are tested) is represented in the first column. The output for the model in the second column includes controls.
+
+The authors' provided code included a variety of model formulations, many of which were not included in the main study. To create the tables, I identified those used in the final paper, and curated and formatted the appropriate stargazer outputs. For the figures, I cleaned and compiled the relevant `effects` outputs and used ggplot to create the graphics, which were not included in the authors' provided code.
+
+### Study 1: Nascent Political Ambition
+The response variable in study one was attitude towards running for political office among people who had never been politicians. Survey participants ranked their attitude from "absolutely no interest," to "open to the possibility," to "actively considering." 
+
+Figure 1 illustrates the predicted probabilities of being "open to the possibility" of running for political office at various levels of different personality traits, based on the controlled version of the ordered logit model in Table 1. These probabilities were generated using the effects package. 
+
+```{r Table 1, results='asis', warning=FALSE, message=FALSE, header = FALSE}
+
+
+## TABLE 1 OUTPUT - ordered logit used
+stargazer(mod.150,mod.50, type='latex', style='default',
+          column.labels = c("No controls", "Demographic controls"),
+          title = "Nascent Political Ambition",
+          dep.var.caption = "Attractiveness of Elected Office",
+          dep.var.labels = "",
+          header = FALSE,
+          font.size = "scriptsize",
+          covariate.labels = c("Extroversion", "Openness to experience", "Agreeableness",
+                               "Conscientiousness", "Emotional stability", 
+                               "Education: Less than high school", "Education: High school",
+                               "Education: Bachelor's degree", "Education: Graduate degree",
+                               "Income", "Race: Afican American", "Race: Asian", 
+                               "Race: Native American", "Race: Hispanic", 
+                               "Race: Multiracial", "Ideology: Liberal", 
+                               "Ideology: Conservative", "Party ID: Democrat", 
+                               "PartyID: Republican", "Gender: Female", "Age (in years)",
+                               "Observations"))
+
+```
+
+```{r Figure 1 cleaning, warning=FALSE, message=FALSE}
+
+# Original replication code used model 51, but the models in tables are 50 and 150, AND the figure caption says it used ordered logit in the subtitle (51 is multinomial) so model 50 (with controls) is used here. Neither 50 nor 51 yield the exact results in the paper - not sure why. 
+# Added correct leveling, selected relevant columns
+
+effagree <- as.data.frame(effect(c('Agree'), mod=mod.50, xlevels=list(Agree=c(0,0.5, 1, 1.5, 2,2.5,3)))) %>%
+  dplyr::select("Agree", "prob.I.am.open.to.the.possibility.of.holding.elective.office.in.the.future.") %>%
+  rename("possible" = "prob.I.am.open.to.the.possibility.of.holding.elective.office.in.the.future.",
+         "score" = "Agree") %>%
+  mutate(type = "Agreeableness")
+
+effcons = as.data.frame(effect(c('consc'), mod=mod.50, xlevels=list(consc=c(0,0.5, 1, 1.5, 2,2.5,3)))) %>%
+  dplyr::select("consc", "prob.I.am.open.to.the.possibility.of.holding.elective.office.in.the.future.") %>%
+  rename("possible" = "prob.I.am.open.to.the.possibility.of.holding.elective.office.in.the.future.",
+         "score" = "consc") %>%
+  mutate(type = "Conscientiousness")
+
+effextra = as.data.frame(effect(c('Extra'), mod=mod.50, xlevels=list(Extra=c(0,0.5, 1, 1.5, 2,2.5,3)))) %>%
+  dplyr::select("Extra", "prob.I.am.open.to.the.possibility.of.holding.elective.office.in.the.future.") %>%
+  rename("possible" = "prob.I.am.open.to.the.possibility.of.holding.elective.office.in.the.future.",
+         "score" = "Extra") %>%
+  mutate(type = "Extroversion")
+
+effopen = as.data.frame(effect(c('Open'), mod=mod.50, xlevels=list(Open=c(0,0.5, 1, 1.5, 2,2.5,3)))) %>%
+  dplyr::select("Open", "prob.I.am.open.to.the.possibility.of.holding.elective.office.in.the.future.") %>%
+  rename("possible" = "prob.I.am.open.to.the.possibility.of.holding.elective.office.in.the.future.",
+         "score" = "Open") %>%
+  mutate(type = "Openness")
+
+effneuro = as.data.frame(effect(c('emotstab'), mod=mod.50, xlevels=list(emotstab=c(0,0.5, 1, 1.5, 2,2.5,3)))) %>%
+  dplyr::select("emotstab", "prob.I.am.open.to.the.possibility.of.holding.elective.office.in.the.future.") %>%
+  rename("possible" = "prob.I.am.open.to.the.possibility.of.holding.elective.office.in.the.future.",
+         "score" = "emotstab") %>%
+  mutate(type = "Emotional Stability")
+
+# combining
+fig1_data <- rbind(effagree, effcons, effextra, effopen, effneuro)
+
+```
+
+
+
+```{r Figure 1, warning=FALSE, message=FALSE}
+
+fig1_data %>%
+  ggplot(aes(x = score, y = possible, shape = type)) +
+  geom_line() +
+  geom_point() +
+  xlim(0,3) +
+  ylim(0,.4) +
+  theme_minimal() +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_line( size=.2, color="grey" ),
+        panel.grid.minor.y = element_line( size=.2, color="grey" ),
+        panel.grid.minor.x = element_blank(),
+        axis.line.y.left = element_line(size=.2, color="grey")) +
+  labs(title = "Figure 1: Open to the Possibility of Seeking Elective Office",
+       x = "Big Five Personality Score",
+       y = "Possibility (Open to Possibility)",
+       linetype = "",
+       shape = "") +
+  scale_x_continuous(breaks = c(0, 0.5, 1, 1.5, 2, 2.5,3)) 
+
+ggsave("figures/figure1.jpg", width = 13)
+
+```
+
+As mentioned, extroversion and openness were positively associated with finding elective office attractive, while agreeableness and conscientiousness were negatively associated. Emotional stability had little effect.
+
+## Study 2: Progressive Political Ambition
+
+Study 2 relied on survey data from a nationally representative sample of local elected officials. There were two response variables under review. The first, under observation in Table 2 and Figure 2, was a four-level survey result gauging interest in running for elected office again from 1) "something I would absolutely never do" to 4) "I definitely would like to".
+
+Figure 2 illustrates the predicted probabilities of response level 3) "It is something I might undertake if the opportunity presented
+itself", based on the controlled version of the ordered logit model in Table 2. 
+
+Table three examines the third overall response variable, namely the likelihood of running for higher political offices (i.e. from local to state to national). Recall that the politicians surveyed were all local officials. Agreeableness was negatively associated, and openness to experience was positively associated, with desires to seek higher office. 
+
+The results of these analyses differ slightly. The results of the first suggest tha extroversion is positively, and emotional stability is slightly negatively, associated with finding a return to elected office appealing. No other variables have statistically significant results. The second model reveals that openness to experience is positively, and agreeableness is negatively, associated with finding a _higher_ office appealing. These findings are consistent with the authors' hypotheses.
+
+
+```{r AMOS cleaning, warning=FALSE, message=FALSE}
+
+d2 <- read.dta("data/AMOS replication.dta") %>%
+  mutate(runhigher = factor(progamb_runhigher),
+         progamb = as.numeric(runhigher))
+d2$progamb_winlegis_1[d2$progamb_winlegis_1==-99] <- NA
+
+
+```
+
+
+```{r Table 2, results='asis', warning=FALSE, message=FALSE}
+
+# ordered logit, no controls (col 1, table 2)
+mod.71=polr(runhigher~extra4pt+ open4pt+agree4pt+ consc4pt+ stable4pt, data=d2)
+
+# ordered logit, controls (col 2, table 2)
+mod.71c <- polr(runhigher~extra4pt+ open4pt+agree4pt+ consc4pt+ stable4pt+ closevote+ tenure+ progamb_current+termlimits+ partisanelect+ progamb_similar_1+ progamb_winlegis_1 + gender, data=d2)
+# coefficients slightly different - appears something is different about the data because the observation numbers are slightly off. Tried it with their exact code so not sure what's going on here.
+
+mod.72 = polr(runhigher~extra4pt+ open4pt+agree4pt+ consc4pt+ stable4pt+ closevote+ tenure+ progamb_current+termlimits+ partisanelect+ tenure+ progamb_similar_1+ progamb_winlegis_1, data=d2)
+
+# Table 2
+stargazer(mod.71, mod.71c, type = "latex",
+          header = FALSE,
+          column.labels = c("No controls", "Demographic controls"),
+          dep.var.caption = "Progressive Political Ambition",
+          dep.var.labels = "",
+          title = "Progressive Political Ambition",
+          covariate.labels = c("Extroversion", "Openness to experience", "Agreeableness",
+                               "Conscientiousness", "Emotional stability", 
+                               "Won previous election by 5% pts. or less", "Years in office",
+                               "Anticipated length in current office", 
+                               "Term limits exist for current office", "Partisan elections",
+                               "Probability current seat filled by similar candidate",
+                               "Probability similar candidate could win legislative seat",
+                               "Gender: Female", "Observations"))
+
+
+```
+
+
+```{r Fig 2 data cleaning, warning=FALSE, message=FALSE, include = FALSE}
+
+# they use mod 72, but that's not what's displayed (same as fig 1 in this regard)
+
+mod.72.o.ef = as.data.frame(effect(c('open4pt'),mod=mod.71c, xlevels=list(open4pt=c(0,0.5, 1, 1.5, 2,2.5,3)))) %>%
+  dplyr::select("open4pt", "prob.X2") %>%
+  rename("maybe" = "prob.X2",
+         "score" = "open4pt") %>%
+  mutate(type = "Openness")
+
+mod.72.c.ef = as.data.frame(effect(c('consc4pt'),mod=mod.71c, xlevels=list(open4pt=c(0,0.5, 1, 1.5, 2,2.5,3)))) %>%
+  dplyr::select("consc4pt", "prob.X2") %>%
+  rename("maybe" = "prob.X2",
+         "score" = "consc4pt") %>%
+  mutate(type = "Conscientiousness")
+                                   
+mod.72.e.ef = as.data.frame(effect(c('extra4pt'),mod=mod.71c, xlevels=list(open4pt=c(0,0.5, 1, 1.5, 2,2.5,3)))) %>%
+  dplyr::select("extra4pt", "prob.X2") %>%
+  rename("maybe" = "prob.X2",
+         "score" = "extra4pt") %>%
+  mutate(type = "Extroversion")
+
+mod.72.a.ef = as.data.frame(effect(c('agree4pt'),mod=mod.71c, xlevels=list(open4pt=c(0,0.5, 1, 1.5, 2,2.5,3)))) %>%
+  dplyr::select("agree4pt", "prob.X2") %>%
+  rename("maybe" = "prob.X2",
+         "score" = "agree4pt") %>%
+  mutate(type = "Agreeableness")
+
+mod.72.n.ef = as.data.frame(effect(c('stable4pt'),mod=mod.71c, xlevels=list(open4pt=c(0,0.5, 1, 1.5, 2,2.5,3)))) %>%
+  dplyr::select("stable4pt", "prob.X2") %>%
+  rename("maybe" = "prob.X2",
+         "score" = "stable4pt") %>%
+  mutate(type = "Emotional Stability")
+
+fig2_data <- rbind(mod.72.o.ef, mod.72.c.ef, mod.72.e.ef, mod.72.a.ef, mod.72.n.ef)
+
+```
+
+
+```{r Figure 2, warning=FALSE, message=FALSE}
+
+fig2_data %>%
+  ggplot(aes(x = score, y = maybe, shape = type)) +
+  geom_line() +
+  geom_point() +
+  xlim(0,3) +
+  ylim(0,.4) +
+  theme_minimal() +
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.major.y = element_line( size=.2, color="grey" ),
+        panel.grid.minor.y = element_line( size=.2, color="grey" ),
+        panel.grid.minor.x = element_blank(),
+        axis.line.y.left = element_line(size=.2, color="grey")) +
+  labs(title = "Figure 2: Open to the Possibility of Seeking Higher Office",
+       x = "Big Five Personality Score",
+       y = "Probability (If the Opportunity Presented Itself)",
+       linetype = "",
+       shape = "") +
+  scale_x_continuous(breaks = c(0, 0.5, 1, 1.5, 2, 2.5,3)) 
+
+ggsave("figures/figure2.jpg", width = 13)
+
+```
+
+```{r Table 3 prep, results='asis', warning=FALSE, message=FALSE, include = FALSE}
+
+# Ordered logit
+mod.100 = polr(office~extra4pt+ open4pt+agree4pt+ consc4pt+ stable4pt, data=d2)
+mod.101 = polr(office~extra4pt+ open4pt+agree4pt+ consc4pt+ stable4pt+ closevote+ tenure+ progamb_current+termlimits+ partisanelect+ tenure+ progamb_similar_1+ progamb_winlegis_1+gender, data=d2)
+
+# Multinomial (not used)
+mod.111 = multinom(office~extra4pt+ open4pt+agree4pt+ consc4pt+ stable4pt+ closevote+ tenure+ progamb_current+termlimits+ partisanelect+ tenure+ progamb_similar_1+ progamb_winlegis_1+gender, data=d2)
+
+```
+
+
+```{r Table 3, results='asis', warning=FALSE, message=FALSE}
+# Table 3
+stargazer(mod.100,mod.101, type='latex', style='default',
+          header = FALSE,
+          column.labels = c("No controls", "Demographic controls"),
+          dep.var.caption = "Appeal of Higher Office",
+          dep.var.labels = "",
+          title = "Progressive Political Ambition",
+          covariate.labels = c("Extroversion", "Openness to experience", "Agreeableness",
+                               "Conscientiousness", "Emotional stability", 
+                               "Won previous election by 5% pts. or less", "Years in office",
+                               "Anticipated length in current office", 
+                               "Term limits exist for current office", "Partisan elections",
+                               "Probability current seat filled by similar candidate",
+                               "Probability similar candidate could win legislative seat",
+                               "Gender: Female", "Observations"))
+
+```
+
+
+_Inconsistency Note:_ While I was able to exactly recreate the results of most of the models under review, my outputs for the progressive political ambition models that included controls did not exactly match those in the original paper. The recorded sample sizes in my model outputs were also smaller. I suspect that the data available for replication may have included more NAs in some of the control columns that the actual set used for the study. While there are slight differences, the results are still remarkably similar. The figures, which used controlled results, were also slightly affected, but again, the broad takeaways held.
+
+\newpage
+
+## Extension
+
+### Quantitative Methodology and Visualizations
+Many of the extensions that I would have posed appear in the authors' [**online appendix**](http://adamdynes.com/documents/0PUB_2019_PB_dynes-etal_personality-ambition_appendix.pdf). These include visualizations with confidence intervals, different model formulas and specifications, and so on. 
+
+### Proposed Research Methodology
+There are a number of possible extensions relating to the research methodology itself. To begin with, research on the five-factor model of personality often glosses over the specific traits that define each categorization. There are actually 30 total facet scales most prominently defined, six for each of the five major personality traits.^[Costa and McCrae, “Domains and Facets.”] While the 31-question self-assessment used in this study likely would not be able to credibly shed light on all 30 facets, a longer self-assessment might. The original, developed in 1992, includes 240 questions. While there would obviously be a sample size trade off, as fewer people would be willing to fill out a survey 8x longer, we might be able to pin down which personality facets actually matter most in determining political ambition. The "low fidelity" of the five factor approach obscures potentially useful information.^[Soto and John, “Ten Facet Scales for the Big Five Inventory.”] For example, does the extrovert's come equally from the sub-domain of excitement seeking as it does from positive emotions? These sub facets have important implications. For instance, in classifications of an individual's level of 'character' (in the upstanding/integrity sense, not as a synonym for personality), some facets of Conscientiousness matter while others do not.^[Rubenzer, Personality, Character, and Leadership In The White House.] This is just one illustration, but understanding sub-facets might help understand both how character/integrity interacts with ambition, as well as the implications that has for the composition of our political leadership.
+
+There are also well-documented issues with self-reporting, on many fronts. Those related to personality measurement are more difficult to resolve. While someone filling out a survey on their own personality may exhibit social desirability bias, peer evaluations can be even more prone to this phenomenon as individuals often face difficulty doling out harsh evaluations. Other types of implicit evaluations, where respondent's general reactions to stimuli are used as a proxy for underlying personality traits, are also flawed and often involve in-person administration. 
+
+However, the degree to which a person's self-reported willingness to make an initial or additional run for public office bears out in reality can theoretically be measured very conclusively. A longitudinal study of the same survey respondents could shed light on the degree to which different facets of personality actually manifested in a run for political office. There might be subtle differences in self-reported theoretical enthusiasm and an actual run. To get around the long time frame, cross sectional research comparing first-time political candidates to people who have never run for public office could also answer this question. This also avoids the selection bias problem with earlier research on politician personality differences. Differences could be a symptom of which traits make candidates more likely to be elected, rather than which traits make them more likely to run for office. An examination of candidates would not have the same problem. A similar approach to verify progressive ambition results might also be interesting. Are there differences A) in the personality profiles of new vs. longtime, or local vs. national level politicians, and B) in the profiles of the people who attempt runs (again, to control for electorate bias)?
+
+## Conclusion
+
+I was able to replicate the findings in Dynes et al. demonstrating an interesting connection between five factor models of personality and two levels of political ambition. Overall, personality had a larger and more statistically significant effect on nascent political ambition, with agreeableness and conscientiousness being negatively association and extroversion and openness negatively associated. This was true across model formulas and specifications. Personality had a weaker but notable effect on progressive personality, though the facets associated with higher overall interest in returning to political office (extroversion and emotional stability (+)) were different from those associated with interest in _higher_ political office (openness (+), agreeableness(-)). 
+
+Most limitations, addressed in the extension section, come from methodology and measurement. While assessments of personality are difficult to verify with complete authority, a more in-depth questionnaire could shed light on specific sub-facets within each big five trait that have a greater impact on political ambition and the resulting composition of American political leadership. This is important given the low fidelity of five-factor classifications. Furthermore, testing the empirical fact of whether individuals choose to make an initial or follow-up run for political office would further validate the survey responses indicated in this analysis. Overall, Dynes et al. make a valuable contribution to research exploring the importance of individual personality in political outcomes, beyond structural factors. 
+
+\newpage
+
+## Bibliography
+
+Costa, Paul T., and Robert R. McCrae. “Domains and Facets: Hierarchical Personality Assessment Using the Revised NEO Personality Inventory.” Journal of Personality Assessment 64, no. 1 (1995): 21–50. https://doi.org/10.1207/s15327752jpa6401_2.
+
+Dynes, Adam M., Hans J. G. Hassell, and Matthew R. Miles. “The Personality of the Politically Ambitious.” Political Behavior 41, no. 2 (June 1, 2019): 309–36. https://doi.org/10.1007/s11109-018-9452-x.
+
+Rubenzer, Steven J. Personality, Character, and Leadership In The White House: Psychologists Assess the Presidents. Lincoln: University of Nebraska Press, 2004. http://muse.jhu.edu/book/28107.
+
+Soto, Christopher J., and Oliver P. John. “Ten Facet Scales for the Big Five Inventory: Convergence with NEO PI-R Facets, Self-Peer Agreement, and Discriminant Validity.” Journal of Research in Personality 43, no. 1 (February 1, 2009): 84–90. https://doi.org/10.1016/j.jrp.2008.10.002.
+
+
+
